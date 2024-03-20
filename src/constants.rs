@@ -1,0 +1,1 @@
+pub const HYPERVISOR_EXTENSION: usize = 0x7;
