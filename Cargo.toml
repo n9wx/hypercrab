@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bitflags = "1.3.2"
 fdt = {version = "0.1.5"}
+spin = "0.9.8"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 raw-cpuid = "11.0.1"
