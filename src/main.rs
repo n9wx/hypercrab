@@ -1,35 +1,41 @@
-#![feature(panic_info_message)]
-#![feature(naked_functions)]
+#![feature(panic_info_message, alloc_error_handler, naked_functions)]
 #![no_std]
 #![no_main]
 
+use crate::constants::BOOT_STACK_SIZE;
+use core::arch::global_asm;
 mod arch;
-mod sbi;
-mod constants;
-mod lang_items;
 mod console;
+mod constants;
+mod guest;
+mod lang_items;
+mod mm;
+mod sbi;
+mod schedule;
 
+extern crate alloc;
 
-#[link_section = ".bss.stack"]
-static BOOT_STACK: [u8; (1 << 12) * 32] = [0u8; (1 << 12) * 32];
-
-#[link_section = ".text.entry"]
-#[export_name = "_start"]
-#[naked]
-pub unsafe extern "C" fn start() -> ! {
-    use core::arch::asm;
-    asm!(
-    "la sp,{boot_stack}",
-    "call hypervisor_entry",
-    boot_stack = sym BOOT_STACK,
-    options(noreturn)
-    )
-}
+#[cfg(target_arch = "riscv64")]
+global_asm!(include_str!("arch/riscv/entry.S"));
 
 #[no_mangle]
-pub fn hypervisor_entry(hart_id: usize) {
+pub fn hypervisor_entry(hart_id: usize, dtb_paddress: usize) {
     if arch::is_cup_support_virtualization() {
-        println!("current cpu support hardware virtualization!")
+        println!("current cpu support hardware virtualization!");
+        before_start_check();
     }
+    walk_fdt(dtb_paddress);
     sbi::sbi_shutdown()
+}
+
+pub fn before_start_check() {
+    #[cfg(target_arch = "riscv64")]
+    {}
+}
+
+pub fn walk_fdt(address: usize) {
+    let mut fdt = unsafe { fdt::Fdt::from_ptr(address as *const u8).unwrap() };
+    for node in fdt.all_nodes() {
+        println!("[INFO] find device node {:?}", node.name);
+    }
 }
