@@ -1,6 +1,6 @@
-use bitflags::*;
 use crate::arch::riscv::page_table::address::PhysPageNum;
 use crate::arch::riscv::page_table::sv39::SV39_PPN_WIDTH_BITS;
+use bitflags::*;
 
 bitflags! {
     /// page table entry flags for riscv
@@ -16,7 +16,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[repr(C)]
 pub struct PageTableEntry {
     pub entry: usize,
@@ -24,7 +24,13 @@ pub struct PageTableEntry {
 
 impl PageTableEntry {
     pub fn new(ppn: PhysPageNum, flags: PTEFlags) -> Self {
-        Self { entry: ppn.0 << 10 | flags.bits as usize }
+        Self {
+            entry: ppn.0 << 10 | flags.bits as usize,
+        }
+    }
+
+    pub fn invalid() -> Self {
+        Self { entry: 0 }
     }
 
     pub fn ppn(&self) -> PhysPageNum {

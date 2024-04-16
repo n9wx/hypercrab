@@ -1,13 +1,13 @@
 use crate::constants::MEMORY_END;
-use crate::mm::address::*;
+use crate::mm::page_table::*;
 use crate::println;
 use alloc::vec::Vec;
 use spin::{Mutex, Once};
 
 /// frame tracker that has same life times as allocated page
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FrameTracker {
-    ppn: PhysPageNum,
+    pub ppn: PhysPageNum,
 }
 
 impl FrameTracker {
@@ -19,7 +19,7 @@ impl FrameTracker {
 
 impl Drop for FrameTracker {
     fn drop(&mut self) {
-        todo!()
+        frame_dealloc(self.ppn)
     }
 }
 

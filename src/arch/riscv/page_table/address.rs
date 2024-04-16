@@ -17,22 +17,22 @@ macro_rules! debug_impl {
     };
 }
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysPageNum(pub usize);
 
 debug_impl!(PhysPageNum, "PPN");
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysAddress(pub usize);
 
 debug_impl!(PhysAddress, "PA");
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtPageNum(pub usize);
 
 debug_impl!(VirtPageNum, "VPN");
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtAddress(pub usize);
 
 debug_impl!(VirtAddress, "VA");
@@ -238,3 +238,6 @@ where
         }
     }
 }
+
+pub type VPNRange = PageRange<VirtPageNum>;
+pub type PPNRange = PageRange<PhysPageNum>;

@@ -1,4 +1,7 @@
-mod page_table;
+pub mod context;
+pub mod page_table;
+
+pub use context::*;
 
 pub fn is_cpu_support() -> bool {
     use crate::constants::HYPERVISOR_EXTENSION;
