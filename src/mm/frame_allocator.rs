@@ -1,6 +1,7 @@
 use crate::constants::MEMORY_END;
 use crate::mm::page_table::*;
 use crate::println;
+use alloc::collections::LinkedList;
 use alloc::vec::Vec;
 use spin::{Mutex, Once};
 
@@ -27,13 +28,17 @@ trait FrameAllocator {
     fn new() -> Self;
     fn alloc(&mut self) -> Option<PhysPageNum>;
 
+    /// alloc n contiguous pages
+    fn alloc_n_pages(&mut self, order: usize) -> Option<Vec<PhysPageNum>>;
+
     fn dealloc(&mut self, ppn: PhysPageNum);
 }
 
+// todo 重新实现一个buddy page allocator，使用stack的分配方式会导致最后变成以单个页帧为单位的碎片
 pub struct StackFrameAllocator {
     current_ppn: usize,
     end: usize,
-    recycled: Vec<usize>,
+    recycled: LinkedList<usize>,
 }
 
 impl StackFrameAllocator {
@@ -48,12 +53,12 @@ impl FrameAllocator for StackFrameAllocator {
         Self {
             current_ppn: 0,
             end: 0,
-            recycled: Vec::new(),
+            recycled: LinkedList::new(),
         }
     }
 
     fn alloc(&mut self) -> Option<PhysPageNum> {
-        if let Some(ppn) = self.recycled.pop() {
+        if let Some(ppn) = self.recycled.pop_back() {
             Some(PhysPageNum(ppn))
         } else if self.current_ppn != self.end {
             self.current_ppn += 1;
@@ -63,13 +68,28 @@ impl FrameAllocator for StackFrameAllocator {
         }
     }
 
+    // 确保能够分配连续的物理页帧
+    fn alloc_n_pages(&mut self, order: usize) -> Option<Vec<PhysPageNum>> {
+        let page_nums = 1 << order;
+        if (self.end - self.current_ppn) < page_nums {
+            return None;
+        }
+
+        let mut ret = Vec::with_capacity(page_nums);
+        for _ in 0..page_nums {
+            ret.push(PhysPageNum(self.current_ppn));
+            self.current_ppn += 1;
+        }
+        Some(ret)
+    }
+
     fn dealloc(&mut self, ppn: PhysPageNum) {
         let ppn = ppn.0;
         if ppn >= self.current_ppn || self.recycled.iter().any(|&v| v == ppn) {
             panic!("Frame ppn={:#x} has not been allocated!", ppn);
         }
 
-        self.recycled.push(ppn);
+        self.recycled.push_back(ppn);
     }
 }
 
@@ -97,6 +117,18 @@ pub fn frame_alloc() -> Option<FrameTracker> {
         let frame_allocator_ref = FRAME_ALLOCATOR.get_mut();
         let mut frame_allocator = frame_allocator_ref.unwrap().lock();
         frame_allocator.alloc().map(FrameTracker::new)
+    }
+}
+
+pub fn n_frames_alloc(order: usize) -> Option<Vec<FrameTracker>> {
+    unsafe {
+        let frame_allocator_ref = FRAME_ALLOCATOR.get_mut();
+        let mut frame_allocator = frame_allocator_ref.unwrap().lock();
+        frame_allocator.alloc_n_pages(order).map(|vec| {
+            vec.into_iter()
+                .map(FrameTracker::new)
+                .collect::<Vec<FrameTracker>>()
+        })
     }
 }
 
