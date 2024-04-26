@@ -196,6 +196,13 @@ where
     pub fn get_end(&self) -> T {
         self.end.clone()
     }
+
+    pub fn iter(&self) -> PageRangeIterator<T> {
+        PageRangeIterator {
+            current: self.start.clone(),
+            end: self.end.clone(),
+        }
+    }
 }
 
 impl<T> IntoIterator for PageRange<T>

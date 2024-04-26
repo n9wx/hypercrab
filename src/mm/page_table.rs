@@ -19,3 +19,8 @@ pub trait PageTable: Clone {
     /// usually page table register
     fn token(&self) -> usize;
 }
+
+pub trait SecondStagePageTable: PageTable {
+    /// create second page table for guest
+    fn new_second_stage() -> Self;
+}

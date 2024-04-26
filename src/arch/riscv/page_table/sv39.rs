@@ -1,8 +1,10 @@
 //! constants , structures and functions for Sv39 page based virtual address space
 
-use crate::arch::page_table::{PTEFlags, PageTableEntry, PhysPageNum, VirtPageNum};
+use crate::arch::page_table::{
+    PTEFlags, PageTableEntry, PhysPageNum, VirtPageNum, SECOND_STAGE_PAGE_TABLE_PAGE_NUMS,
+};
 use crate::constants::PAGE_SIZE_BITS;
-use crate::mm::{frame_alloc, FrameTracker, PageTable};
+use crate::mm::{frame_alloc, n_frames_alloc, FrameTracker, PageTable, SecondStagePageTable};
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -100,5 +102,15 @@ impl PageTable for PageTableAdapter {
     /// return satp regs value
     fn token(&self) -> usize {
         8 << 60 | self.root_ppn.0
+    }
+}
+
+impl SecondStagePageTable for PageTableAdapter {
+    fn new_second_stage() -> Self {
+        let frames = n_frames_alloc(SECOND_STAGE_PAGE_TABLE_PAGE_NUMS).unwrap();
+        Self {
+            root_ppn: frames[0].ppn,
+            frames,
+        }
     }
 }
