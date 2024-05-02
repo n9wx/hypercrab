@@ -22,3 +22,15 @@ pub fn page_mode_probe() {
         PAGE_MODE.call_once(|| satp.mode());
     }
 }
+
+#[inline(always)]
+pub unsafe fn active_page_table(satp: usize) {
+    use core::arch::asm;
+    unsafe {
+        asm!(
+        "csrw satp,{satp}",
+        "sfenc.vma",
+        satp = in(reg) satp
+        )
+    }
+}
