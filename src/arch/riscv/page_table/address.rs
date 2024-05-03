@@ -125,7 +125,9 @@ impl PhysPageNum {
 
 impl VirtPageNum {
     /// return indexes in page table
+    ///
     /// returned indexes array determined by const PAGE_TRANSLATION_LEVELS
+    ///
     /// for sv39 now it's 3
     pub fn indexes(&self) -> [usize; PAGE_TRANSLATION_LEVELS] {
         let mask = (1 << VPN_INDEX_WIDTH_BITS) - 1;
@@ -135,6 +137,17 @@ impl VirtPageNum {
             ret[i] = vpn & mask;
             vpn >>= VPN_INDEX_WIDTH_BITS;
         }
+        ret
+    }
+
+    /// return extended indexes in gstage pagetable
+    ///
+    /// gstage pte has 2 more bits in first translation level
+    pub fn extended_indexes(&self) -> [usize; PAGE_TRANSLATION_LEVELS] {
+        let mut ret = self.indexes();
+
+        ret[0] = (self.0 >> (VPN_INDEX_WIDTH_BITS * (PAGE_TRANSLATION_LEVELS - 1)))
+            & ((1 << (VPN_INDEX_WIDTH_BITS + 2)) - 1);
         ret
     }
 }
