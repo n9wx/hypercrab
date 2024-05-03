@@ -4,7 +4,9 @@ use crate::arch::page_table::{
     PTEFlags, PageTableEntry, PhysPageNum, VirtPageNum, SECOND_STAGE_PAGE_TABLE_PAGE_NUMS,
 };
 use crate::constants::PAGE_SIZE_BITS;
-use crate::mm::{frame_alloc, n_frames_alloc, FrameTracker, GStagePageTable, PageTable};
+use crate::mm::{
+    frame_alloc, n_frames_alloc, FrameTracker, GStagePageTable, PageTable, StepByOne, VPNRange,
+};
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -99,6 +101,14 @@ impl PageTable for PageTableAdapter {
         self.find_pte(vpn).map(|pte| *pte)
     }
 
+    fn page_table_walk(
+        &self,
+        start_vpn: VirtPageNum,
+        end_vpn: VirtPageNum,
+    ) -> RiscvPageTableWalkIter {
+        RiscvPageTableWalkIter::new(start_vpn, end_vpn, self)
+    }
+
     /// return satp regs value
     fn token(&self) -> usize {
         8 << 60 | self.root_ppn.0
@@ -111,6 +121,40 @@ impl GStagePageTable for PageTableAdapter {
         Self {
             root_ppn: frames[0].ppn,
             frames,
+        }
+    }
+}
+
+pub struct RiscvPageTableWalkIter<'a> {
+    current: VirtPageNum,
+    end: VirtPageNum,
+    page_table: &'a PageTableAdapter,
+}
+
+impl<'a> RiscvPageTableWalkIter<'a> {
+    pub fn new(
+        start_vpn: VirtPageNum,
+        end_vpn: VirtPageNum,
+        page_table: &'a PageTableAdapter,
+    ) -> Self {
+        Self {
+            current: start_vpn,
+            end: end_vpn,
+            page_table,
+        }
+    }
+}
+
+impl<'a> Iterator for RiscvPageTableWalkIter<'a> {
+    type Item = &'a mut PageTableEntry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current.0 != self.end.0 {
+            let ret = self.page_table.find_pte(self.current);
+            self.current.step();
+            ret
+        } else {
+            None
         }
     }
 }

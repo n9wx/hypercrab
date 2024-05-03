@@ -1,5 +1,4 @@
-#[cfg(target_arch = "riscv64")]
-pub use crate::arch::page_table::*;
+use crate::mm::{PTEFlags, PageTableEntry, PageTableWalkIter, PhysPageNum, VirtPageNum};
 
 pub trait PageTable: Clone {
     fn new() -> Self;
@@ -15,7 +14,11 @@ pub trait PageTable: Clone {
 
     fn translate(&mut self, vpn: VirtPageNum) -> Option<PageTableEntry>;
 
+    ///walk through page table in specify vpn range
+    fn page_table_walk(&self, start_vpn: VirtPageNum, end_vpn: VirtPageNum) -> PageTableWalkIter;
+
     /// page table root token
+    ///
     /// usually page table register
     fn token(&self) -> usize;
 }
