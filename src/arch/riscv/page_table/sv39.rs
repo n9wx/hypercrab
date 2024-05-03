@@ -4,7 +4,7 @@ use crate::arch::page_table::{
     PTEFlags, PageTableEntry, PhysPageNum, VirtPageNum, SECOND_STAGE_PAGE_TABLE_PAGE_NUMS,
 };
 use crate::constants::PAGE_SIZE_BITS;
-use crate::mm::{frame_alloc, n_frames_alloc, FrameTracker, PageTable, SecondStagePageTable};
+use crate::mm::{frame_alloc, n_frames_alloc, FrameTracker, GStagePageTable, PageTable};
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -44,7 +44,7 @@ impl PageTableAdapter {
 
     pub fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let indexes = vpn.indexes();
-        let mut curr_ppn = self.root_ppn;
+        let curr_ppn = self.root_ppn;
 
         for (i, idx) in indexes.iter().enumerate() {
             let pte = &mut curr_ppn.get_pte_array()[*idx];
@@ -105,8 +105,8 @@ impl PageTable for PageTableAdapter {
     }
 }
 
-impl SecondStagePageTable for PageTableAdapter {
-    fn new_second_stage() -> Self {
+impl GStagePageTable for PageTableAdapter {
+    fn new_guest_stage() -> Self {
         let frames = n_frames_alloc(SECOND_STAGE_PAGE_TABLE_PAGE_NUMS).unwrap();
         Self {
             root_ppn: frames[0].ppn,

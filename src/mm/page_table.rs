@@ -20,7 +20,7 @@ pub trait PageTable: Clone {
     fn token(&self) -> usize;
 }
 
-pub trait SecondStagePageTable: PageTable {
+pub trait GStagePageTable: PageTable {
     /// create second page table for guest
-    fn new_second_stage() -> Self;
+    fn new_guest_stage() -> Self;
 }
