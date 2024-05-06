@@ -26,45 +26,6 @@ pub struct PageTableAdapter {
     pub frames: Vec<FrameTracker>,
 }
 
-impl PageTableAdapter {
-    pub fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
-        let indexes = vpn.indexes();
-        let mut curr_ppn = self.root_ppn;
-
-        for (i, idx) in indexes.iter().enumerate() {
-            let pte = &mut curr_ppn.get_pte_array()[*idx];
-            if i == 2 {
-                return Some(pte);
-            }
-            if !pte.is_valid() {
-                return None;
-            }
-            curr_ppn = pte.ppn();
-        }
-        None
-    }
-
-    pub fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
-        let indexes = vpn.indexes();
-        let curr_ppn = self.root_ppn;
-
-        for (i, idx) in indexes.iter().enumerate() {
-            let pte = &mut curr_ppn.get_pte_array()[*idx];
-            // todo 如果这个页是刚分配的，pte的内容应该是混乱的，有没有可能刚好v bit是1？
-            if i == 2 {
-                return Some(pte);
-            }
-            if !pte.is_valid() {
-                let frame = frame_alloc().expect("[kernel] oom!");
-                // rwx must be 0 ,refer this is not a leaf pte
-                *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
-                self.frames.push(frame)
-            }
-        }
-        None
-    }
-}
-
 impl PageTable for PageTableAdapter {
     fn new() -> Self {
         let frame = frame_alloc().unwrap();
@@ -112,6 +73,42 @@ impl PageTable for PageTableAdapter {
     /// return satp regs value
     fn token(&self) -> usize {
         8 << 60 | self.root_ppn.0
+    }
+    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+        let indexes = vpn.indexes();
+        let mut curr_ppn = self.root_ppn;
+
+        for (i, idx) in indexes.iter().enumerate() {
+            let pte = &mut curr_ppn.get_pte_array()[*idx];
+            if i == 2 {
+                return Some(pte);
+            }
+            if !pte.is_valid() {
+                return None;
+            }
+            curr_ppn = pte.ppn();
+        }
+        None
+    }
+
+    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+        let indexes = vpn.indexes();
+        let curr_ppn = self.root_ppn;
+
+        for (i, idx) in indexes.iter().enumerate() {
+            let pte = &mut curr_ppn.get_pte_array()[*idx];
+            // todo 如果这个页是刚分配的，pte的内容应该是混乱的，有没有可能刚好v bit是1？
+            if i == 2 {
+                return Some(pte);
+            }
+            if !pte.is_valid() {
+                let frame = frame_alloc().expect("[kernel] oom!");
+                // rwx must be 0 ,refer this is not a leaf pte
+                *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
+                self.frames.push(frame)
+            }
+        }
+        None
     }
 }
 
