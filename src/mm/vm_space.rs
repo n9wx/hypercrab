@@ -1,8 +1,11 @@
 use crate::arch::page_table::PTEFlags;
 use crate::constants::MEMORY_END;
 use crate::mm::frame_allocator::FrameTracker;
-use crate::mm::page_table::{PhysAddress, PhysPageNum, VirtAddress, VirtPageNum};
-use crate::mm::{frame_alloc, GStagePageTable, PageTable, PageTableAdapter};
+use crate::mm::page_table::{
+    active_page_table, fill_guest_page_table, CombinedWalker, PPNRange, PageTableAdapter,
+    PhysAddress, PhysPageNum, VPNRange, VirtAddress, VirtPageNum,
+};
+use crate::mm::{frame_alloc, GStagePageTable, PageTable, KERNEL_START_PA};
 use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -112,6 +115,11 @@ impl<P: PageTable> MemRegion<P> {
             page_table.unmap((self.start_vpn.0 + offset).into());
         }
     }
+
+    #[inline]
+    pub fn end_vpn(&self) -> VirtPageNum {
+        VirtPageNum(self.start_vpn.0 + self.page_nums + 1)
+    }
 }
 
 extern "C" {
@@ -212,24 +220,58 @@ impl<P: PageTable> HostAddressSpace<P> {
         host_vm_space
     }
 
-    pub fn alloc_vm_space<S: GStagePageTable>(
+    pub fn alloc_vm_space<G: GStagePageTable>(
         &mut self,
         start_va: VirtAddress,
         size: usize,
-    ) -> GuestAddressSpace<S> {
-        let mut guest_pm_space = GuestAddressSpace::<PageTableAdapter>::new_bare();
+    ) -> GuestAddressSpace<G> {
+        // first map guest mem region to host address space
+        let mut host_map_region = MemRegion::<P>::new(
+            start_va,
+            size,
+            MapType::Framed,
+            MapPermission::R | MapPermission::W,
+        );
+        // don't push mem region into host address space now
+        host_map_region.map(&mut self.page_table);
 
-        let start_vpn = start_va.current_page_number();
-        let page_nums = VirtAddress(start_va.0 + size).current_page_number().0 - start_vpn.0 + 1;
+        // host mem region
+        let host_start_vpn = start_va.current_page_number();
+        let page_nums =
+            VirtAddress(start_va.0 + size).current_page_number().0 - host_start_vpn.0 + 1;
+        let host_end_vpn = host_map_region.end_vpn();
 
-        todo!()
+        // setup guest pm space
+        let mut guest_pm_space = GuestAddressSpace::<G>::new_bare();
+        let guest_start_ppn = PhysPageNum::from(PhysAddress(KERNEL_START_PA));
+        let guest_end_ppn = PhysPageNum(guest_start_ppn.0 + page_nums);
+
+        // todo 因为现在的FrameTracker实现了drop又没有做引用计数，所以暂时用没有携带任何页面的mem region 填充 guest pm space
+        let guest_mem_region = MemRegion::<G>::new(
+            VirtAddress(KERNEL_START_PA),
+            size,
+            MapType::Framed,
+            MapPermission::R | MapPermission::W | MapPermission::X,
+        );
+        guest_pm_space.regions.push(guest_mem_region);
+
+        // fill g stage page table for guest
+        let combined_walker = CombinedWalker::new(
+            &self.page_table,
+            &mut guest_pm_space.page_table,
+            VPNRange::new(host_start_vpn, host_end_vpn),
+            PPNRange::new(guest_start_ppn, guest_end_ppn),
+        );
+        fill_guest_page_table(combined_walker);
+
+        guest_pm_space
     }
 
     /// active page based virtual address space
     pub fn active(&self) {
         let token = self.page_table.token();
         unsafe {
-            crate::mm::active_page_table(token);
+            active_page_table(token);
         }
     }
 }

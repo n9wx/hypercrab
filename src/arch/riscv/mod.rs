@@ -1,5 +1,6 @@
 pub mod context;
 pub mod page_table;
+pub mod mm;
 
 pub use context::*;
 
