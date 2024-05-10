@@ -139,6 +139,7 @@ pub trait AddressSpace<P: PageTable> {
     type PhysAddress;
     fn translate_va(&self, va: Self::VirtAddress) -> Option<Self::PhysAddress>;
     fn map_region(&mut self, vm_region: MemRegion<P>);
+    fn token(&self) -> usize;
 }
 
 pub struct HostAddressSpace<P: PageTable> {
@@ -164,12 +165,16 @@ impl<P: PageTable> AddressSpace<P> for HostAddressSpace<P> {
         vm_region.map(&mut self.page_table);
         self.regions.push(vm_region);
     }
+
+    fn token(&self) -> usize {
+        self.page_table.token()
+    }
 }
 
 impl<P: PageTable> HostAddressSpace<P> {
     fn new_bare() -> Self {
         Self {
-            regions: Vec::new(),
+            regions: Vec::new(), // todo 因为现在的FrameTracker实现了drop又没有做引用计数，所以暂时用没有携带任何页面的mem region 填充 guest pm space
             page_table: P::new(),
         }
     }
@@ -298,5 +303,9 @@ impl<S: GStagePageTable> AddressSpace<S> for GuestAddressSpace<S> {
     fn map_region(&mut self, mut vm_region: MemRegion<S>) {
         vm_region.map(&mut self.page_table);
         self.regions.push(vm_region);
+    }
+
+    fn token(&self) -> usize {
+        self.page_table.token()
     }
 }

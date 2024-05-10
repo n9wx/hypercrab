@@ -1,6 +1,7 @@
-#[cfg(target_arch = "riscv64")]
-pub use crate::arch::riscv::page_table::*;
-
+use crate::arch::page_table::{
+    PPNRange, PTEFlags, PageTableEntry, PageTableWalkIter, PhysPageNum, StepByOne, VPNRange,
+    VirtPageNum,
+};
 use core::ptr::NonNull;
 
 pub trait PageTable: Clone {
