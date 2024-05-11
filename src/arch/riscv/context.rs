@@ -1,26 +1,29 @@
+use riscv::register::hgatp::Hgatp;
 use riscv::register::{
     hstatus::{self, Hstatus},
     sstatus::{self, Sstatus, SPP},
 };
 
 #[repr(C)]
-pub struct Context {
+#[derive(Copy, Clone)]
+pub struct TrapContext {
     // general purpose regs
     pub regs: [usize; 32],
     // vsstatus for the hart
-    pub vsstatus: Sstatus,
+    pub sstatus: Sstatus,
+    // trap pc in guest address space
+    pub sepc: usize,
     // hstatus for vcpu context
     pub hstatus: Hstatus,
-    // trap pc in guest address space
-    pub vsepc: usize,
-    pub hgatp: usize,
-    // stack ptr in vmm address space
-    pub vmm_stack: usize,
+    // hgatp for vcpu context
+    pub hgatp: Hgatp,
+    // stack ptr in hypervisor address space
+    pub guest_hyp_stack: usize,
     // address of trap_handler
     pub trap_handler: usize,
 }
 
-impl Context {
+impl TrapContext {
     #[inline(always)]
     pub fn set_sp(&mut self, sp: usize) {
         self.regs[2] = sp;
@@ -35,12 +38,12 @@ impl Context {
         }
         Self {
             regs: [0; 32],
-            vsstatus: sstatus,
+            sstatus,
             hstatus,
-            vsepc: entry,
-            hgatp,
-            vmm_stack: stack_ptr,
+            sepc: entry,
+            guest_hyp_stack: stack_ptr,
             trap_handler,
+            hgatp: Hgatp::from_bits(hgatp),
         }
     }
 }

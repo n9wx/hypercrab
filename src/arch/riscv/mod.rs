@@ -1,8 +1,14 @@
 pub mod context;
-pub mod page_table;
 pub mod mm;
+pub mod page_table;
+pub mod vm_exit;
 
 pub use context::*;
+use core::arch::global_asm;
+pub use vm_exit::*;
+
+#[cfg(target_arch = "riscv64")]
+global_asm!(include_str!("trap.S"));
 
 pub fn is_cpu_support() -> bool {
     use crate::constants::HYPERVISOR_EXTENSION;
