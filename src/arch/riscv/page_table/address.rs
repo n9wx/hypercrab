@@ -150,6 +150,11 @@ impl VirtPageNum {
             & ((1 << (VPN_INDEX_WIDTH_BITS + 2)) - 1);
         ret
     }
+
+    #[inline]
+    pub fn page_base_va(&self) -> VirtAddress {
+        (self.0 << PAGE_SIZE_BITS).into()
+    }
 }
 
 impl From<PhysPageNum> for PhysAddress {

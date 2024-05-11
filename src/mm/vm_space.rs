@@ -1,11 +1,12 @@
-use crate::arch::page_table::PTEFlags;
-use crate::constants::MEMORY_END;
-use crate::mm::frame_allocator::FrameTracker;
-use crate::mm::page_table::{
-    active_page_table, fill_guest_page_table, CombinedWalker, PPNRange, PageTableAdapter,
-    PhysAddress, PhysPageNum, VPNRange, VirtAddress, VirtPageNum,
+use crate::arch::mm::{GUEST_START_VA, KERNEL_START_PA};
+use crate::arch::page_table::{
+    active_page_table, PPNRange, PTEFlags, PhysAddress, PhysPageNum, VPNRange, VirtAddress,
+    VirtPageNum,
 };
-use crate::mm::{frame_alloc, GStagePageTable, PageTable, KERNEL_START_PA};
+use crate::constants::{GUEST_STACK_BASE, GUEST_STACK_SIZE, MEMORY_END, PAGE_SIZE};
+use crate::mm::frame_allocator::FrameTracker;
+use crate::mm::page_table::{fill_guest_page_table, CombinedWalker};
+use crate::mm::{frame_alloc, GStagePageTable, PageTable};
 use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -143,14 +144,17 @@ pub trait AddressSpace<P: PageTable> {
 }
 
 pub struct HostAddressSpace<P: PageTable> {
-    regions: Vec<MemRegion<P>>,
+    regions: Vec<MemRegion<P>>, //host mem_regions
+    gpm_base: usize,
+    vcpu_stack_base: usize,
     page_table: P,
 }
 
 /// guest  address space descriptor,represent as a host address region
-pub struct GuestAddressSpace<S: GStagePageTable> {
-    regions: Vec<MemRegion<S>>,
-    page_table: S,
+pub struct GuestAddressSpace<G: GStagePageTable> {
+    pub guest_id: usize,
+    pub regions: Vec<MemRegion<G>>,
+    pub page_table: G,
 }
 
 impl<P: PageTable> AddressSpace<P> for HostAddressSpace<P> {
@@ -174,7 +178,9 @@ impl<P: PageTable> AddressSpace<P> for HostAddressSpace<P> {
 impl<P: PageTable> HostAddressSpace<P> {
     fn new_bare() -> Self {
         Self {
-            regions: Vec::new(), // todo 因为现在的FrameTracker实现了drop又没有做引用计数，所以暂时用没有携带任何页面的mem region 填充 guest pm space
+            regions: Vec::new(),
+            gpm_base: GUEST_START_VA,
+            vcpu_stack_base: GUEST_STACK_BASE,
             page_table: P::new(),
         }
     }
@@ -225,29 +231,27 @@ impl<P: PageTable> HostAddressSpace<P> {
         host_vm_space
     }
 
-    pub fn alloc_vm_space<G: GStagePageTable>(
+    pub fn alloc_gpm<G: GStagePageTable>(
         &mut self,
-        start_va: VirtAddress,
+        guest_id: usize,
         size: usize,
-    ) -> GuestAddressSpace<G> {
-        // first map guest mem region to host address space
+    ) -> (GuestAddressSpace<G>, MemRegion<P>) {
         let mut host_map_region = MemRegion::<P>::new(
-            start_va,
+            self.gpm_base.into(),
             size,
             MapType::Framed,
             MapPermission::R | MapPermission::W,
         );
-        // don't push mem region into host address space now
         host_map_region.map(&mut self.page_table);
 
-        // host mem region
-        let host_start_vpn = start_va.current_page_number();
-        let page_nums =
-            VirtAddress(start_va.0 + size).current_page_number().0 - host_start_vpn.0 + 1;
-        let host_end_vpn = host_map_region.end_vpn();
+        // update gpm start va
+        self.gpm_base = PAGE_SIZE + host_map_region.end_vpn().page_base_va().0;
 
-        // setup guest pm space
-        let mut guest_pm_space = GuestAddressSpace::<G>::new_bare();
+        let host_start_vpn = VirtAddress(self.gpm_base).current_page_number();
+        let host_end_vpn = host_map_region.end_vpn();
+        let page_nums = host_end_vpn.0 - host_start_vpn.0;
+
+        let mut gpm = GuestAddressSpace::<G>::new_bare(guest_id);
         let guest_start_ppn = PhysPageNum::from(PhysAddress(KERNEL_START_PA));
         let guest_end_ppn = PhysPageNum(guest_start_ppn.0 + page_nums);
 
@@ -258,18 +262,31 @@ impl<P: PageTable> HostAddressSpace<P> {
             MapType::Framed,
             MapPermission::R | MapPermission::W | MapPermission::X,
         );
-        guest_pm_space.regions.push(guest_mem_region);
 
         // fill g stage page table for guest
         let combined_walker = CombinedWalker::new(
             &self.page_table,
-            &mut guest_pm_space.page_table,
+            &mut gpm.page_table,
             VPNRange::new(host_start_vpn, host_end_vpn),
             PPNRange::new(guest_start_ppn, guest_end_ppn),
         );
         fill_guest_page_table(combined_walker);
+        gpm.regions.push(guest_mem_region);
 
-        guest_pm_space
+        (gpm, host_map_region)
+    }
+
+    /// alloc stack regions and map to hyp address space
+    pub fn alloc_vcpu_stack(&mut self) -> MemRegion<P> {
+        let mut stack_region = MemRegion::<P>::new(
+            self.vcpu_stack_base.into(),
+            GUEST_STACK_SIZE,
+            MapType::Framed,
+            MapPermission::R | MapPermission::W,
+        );
+        stack_region.map(&mut self.page_table);
+
+        stack_region
     }
 
     /// active page based virtual address space
@@ -281,15 +298,14 @@ impl<P: PageTable> HostAddressSpace<P> {
     }
 }
 
-impl<S: GStagePageTable> GuestAddressSpace<S> {
-    pub fn new_bare() -> Self {
+impl<G: GStagePageTable> GuestAddressSpace<G> {
+    pub fn new_bare(guest_id: usize) -> Self {
         Self {
+            guest_id,
             regions: vec![],
-            page_table: S::new_guest_stage(),
+            page_table: G::new_guest_stage(),
         }
     }
-
-    // pub fn add_gpa_region(&mut self,gpa_range:VPNRange)
 }
 
 impl<S: GStagePageTable> AddressSpace<S> for GuestAddressSpace<S> {
@@ -308,4 +324,8 @@ impl<S: GStagePageTable> AddressSpace<S> for GuestAddressSpace<S> {
     fn token(&self) -> usize {
         self.page_table.token()
     }
+}
+
+pub fn gpa2hva(guest_id: usize, gpa: usize) -> usize {
+    todo!()
 }
