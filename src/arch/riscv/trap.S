@@ -57,7 +57,9 @@ __vm_entry:
     ld t1,35*8(sp)
     csrw hgatp,t1
     ld t0,34*8(a0)
+    # load hgatp and flush Gstage pagetable
     csrw hstatus,t0
+    hfence.gvma
     ld t1,32*8(a0)
     csrw sepc,t1
 
