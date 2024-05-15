@@ -50,7 +50,17 @@ macro_rules! from_impl {
 from_impl!(PhysPageNum, SV39_PPN_WIDTH_BITS);
 from_impl!(PhysAddress, SV39_PA_WIDTH_BITS);
 from_impl!(VirtPageNum, SV39_VPN_WIDTH_BITS);
-from_impl!(VirtAddress, SV39_VA_WIDTH_BITS);
+// from_impl!(VirtAddress, SV39_VA_WIDTH_BITS);
+
+impl From<usize> for VirtAddress {
+    fn from(v: usize) -> Self {
+        if v >= (1 << (SV39_VA_WIDTH_BITS - 1)) {
+            VirtAddress(v | (!((1 << SV39_VA_WIDTH_BITS) - 1)))
+        } else {
+            VirtAddress(v)
+        }
+    }
+}
 
 macro_rules! into_impl {
     ($type:ty) => {

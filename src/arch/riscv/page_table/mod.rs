@@ -29,7 +29,7 @@ pub unsafe fn active_page_table(satp: usize) {
     unsafe {
         asm!(
         "csrw satp,{satp}",
-        "sfenc.vma",
+        "sfence.vma",
         satp = in(reg) satp
         )
     }
