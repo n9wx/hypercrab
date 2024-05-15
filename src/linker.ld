@@ -57,6 +57,12 @@ SECTIONS
 /*        *(.initrd)*/
 /*    }*/
 /**/
+
+    . = 0x90000000;
+    .initrd :{
+        *(.initrd)
+    }
+
     /DISCARD/ : {
         *(.eh_frame)
     }
