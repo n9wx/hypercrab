@@ -8,13 +8,13 @@ _start:
     sub sp,sp,t0
 
     # load page table to satp
-    la t0,boot_page_table # 56 bits pa
+    # la t0,boot_page_table # 56 bits pa
     # satp = mode(8 << 60) | boot_page_table
-    li t1,8 << 60
-    srli t0,t0,12 #boot page table ppn
-    or t0,t1,t0
-    csrw satp,t0
-    sfence.vma
+    # li t1,8 << 60
+    # srli t0,t0,12 #boot page table ppn
+    # or t0,t1,t0
+    # csrw satp,t0
+    # sfence.vma
     call hypervisor_entry
 
     .section .bss.stack
