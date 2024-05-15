@@ -1,6 +1,5 @@
 use crate::constants::KERNEL_HEAP_SIZE;
 use crate::println;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use buddy_system_allocator::LockedHeap;
 use core::alloc::Layout;

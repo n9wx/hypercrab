@@ -1,3 +1,4 @@
+use crate::arch::page_table::{PhysAddress, PhysPageNum};
 use crate::constants::MEMORY_END;
 use crate::println;
 use alloc::collections::LinkedList;
