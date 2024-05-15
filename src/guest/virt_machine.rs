@@ -1,33 +1,10 @@
 use crate::arch::mm::KERNEL_START_PA;
 use crate::arch::page_table::PageTableAdapter;
-use crate::arch::{self, vm_exit, TrapContext};
-use crate::constants::GUEST_STACK_SIZE;
+use crate::arch::{vm_exit, TrapContext};
 use crate::guest::vcpu::VCpu;
 use crate::guest::GuestResource;
-use crate::hypervisor::{get_host_guard, HOST_MACHINE};
-use crate::mm::{AddressSpace, GStagePageTable, GuestAddressSpace, PageTable};
+use crate::mm::{hpm_guard, AddressSpace, GStagePageTable, GuestAddressSpace, PageTable};
 use alloc::vec::Vec;
-
-pub struct VirtMachine<const N: usize, G: GStagePageTable> {
-    vcpus: [VCpu; N],
-    address_space: GuestAddressSpace<G>,
-}
-
-impl<const N: usize, G: GStagePageTable> VirtMachine<N, G> {
-    /*    pub fn new(address_space: GuestAddressSpace<G>) -> Self {
-        // todo set guest stack in hyp address space
-        let context = TrapContext::init_context(
-            arch::mm::KERNEL_START_PA,
-            HypervisorStack::alloc_hstack(0).0,
-            address_space.token(),
-            arch::vm_exit as usize,
-        );
-        Self {
-            vcpus: [VCpu::new(context); N],
-            address_space,
-        }
-    }*/
-}
 
 pub struct Guest<P: PageTable, G: GStagePageTable> {
     guest_id: usize,
@@ -37,18 +14,16 @@ pub struct Guest<P: PageTable, G: GStagePageTable> {
 }
 
 impl Guest<PageTableAdapter, PageTableAdapter> {
-    pub fn new(guest_id: usize, cpu_nums: usize) -> Self {
-        let mut host_guard = get_host_guard();
-        let (gpm, host_region) = host_guard
-            .address_space
-            .alloc_gpm::<PageTableAdapter>(guest_id, GUEST_STACK_SIZE);
+    pub fn new(guest_id: usize, cpu_nums: usize, mem_size: usize) -> Self {
+        let mut hpm_guard = hpm_guard();
+        let (gpm, host_region) = hpm_guard.alloc_gpm::<PageTableAdapter>(guest_id, mem_size);
         let mut resources = GuestResource::new(host_region);
 
         let mut vcpus = Vec::with_capacity(cpu_nums);
 
         // init vcpus context
         for vcpu_id in 0..cpu_nums {
-            let stack_region = host_guard.address_space.alloc_vcpu_stack();
+            let stack_region = hpm_guard.alloc_vcpu_stack();
             resources.stack.push(stack_region);
             let context = TrapContext::init_context(
                 KERNEL_START_PA,
@@ -65,5 +40,25 @@ impl Guest<PageTableAdapter, PageTableAdapter> {
             resources,
             address_space: gpm,
         }
+    }
+
+    pub fn load_guest_image(&mut self, guest_data: &[u8]) {
+        unsafe {
+            let dst = core::slice::from_raw_parts_mut(
+                self.resources.get_start_va(),
+                self.resources.get_mem_size(),
+            );
+
+            dst[..guest_data.len()].copy_from_slice(guest_data)
+        }
+    }
+
+    pub fn vcpu_ctx_ptr(&mut self, vcpu_id: usize) -> *mut TrapContext {
+        self.vcpus[vcpu_id].get_ctx_ptr()
+    }
+
+    #[inline(always)]
+    pub fn get_id(&self) -> usize {
+        self.guest_id
     }
 }

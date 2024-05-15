@@ -81,19 +81,12 @@ impl<'a, P: PageTable, G: GStagePageTable + 'a> Iterator for CombinedWalker<'a, 
             None
         } else {
             unsafe {
-                let Some(guest_pte): Option<&'a mut PageTableEntry> = self
+                let guest_pte = self
                     .guest_page_table
                     .as_mut()
-                    .find_pte_create(VirtPageNum(self.current_gppn.0))
-                else {
-                    return None;
-                };
+                    .find_pte_create(VirtPageNum(self.current_gppn.0))?;
 
-                let Some(host_pte): Option<&'a mut PageTableEntry> =
-                    self.host_page_table.find_pte(self.current_hvpn)
-                else {
-                    return None;
-                };
+                let host_pte = self.host_page_table.find_pte(self.current_hvpn)?;
 
                 self.current_hvpn.step();
                 self.current_gppn.step();

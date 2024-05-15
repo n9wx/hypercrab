@@ -1,12 +1,8 @@
 //! constants , structures and functions for Sv39 page based virtual address space
 
-use crate::arch::page_table::{
-    PTEFlags, PageTableEntry, PhysPageNum, VirtPageNum, SECOND_STAGE_PAGE_TABLE_PAGE_NUMS,
-};
+use crate::arch::page_table::{PTEFlags, PageTableEntry, PhysPageNum, VirtPageNum, SECOND_STAGE_PAGE_TABLE_PAGE_NUMS, StepByOne};
 use crate::constants::PAGE_SIZE_BITS;
-use crate::mm::{
-    frame_alloc, n_frames_alloc, FrameTracker, GStagePageTable, PageTable, StepByOne, VPNRange,
-};
+use crate::mm::{frame_alloc, n_frames_alloc, FrameTracker, GStagePageTable, PageTable};
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -93,7 +89,7 @@ impl PageTable for PageTableAdapter {
 
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let indexes = vpn.indexes();
-        let curr_ppn = self.root_ppn;
+        let mut curr_ppn = self.root_ppn;
 
         for (i, idx) in indexes.iter().enumerate() {
             let pte = &mut curr_ppn.get_pte_array()[*idx];
@@ -107,6 +103,7 @@ impl PageTable for PageTableAdapter {
                 *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
                 self.frames.push(frame)
             }
+            curr_ppn = pte.ppn();
         }
         None
     }

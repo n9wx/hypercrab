@@ -3,7 +3,7 @@ use crate::arch::page_table::{
     active_page_table, PPNRange, PTEFlags, PhysAddress, PhysPageNum, VPNRange, VirtAddress,
     VirtPageNum,
 };
-use crate::constants::{GUEST_STACK_BASE, GUEST_STACK_SIZE, MEMORY_END, PAGE_SIZE};
+use crate::constants::{GUEST_STACK_SIZE, GUEST_STACK_TOP, MEMORY_END, PAGE_SIZE, TRAMPOLINE};
 use crate::mm::frame_allocator::FrameTracker;
 use crate::mm::page_table::{fill_guest_page_table, CombinedWalker};
 use crate::mm::{frame_alloc, GStagePageTable, PageTable};
@@ -53,10 +53,10 @@ impl<P: PageTable> MemRegion<P> {
         permission: MapPermission,
     ) -> Self {
         let start_vpn = start_va.current_page_number();
-        let end_vpn = VirtAddress(start_va.0 + size).current_page_number();
+        let end_vpn = VirtAddress(start_va.0 + size).next_page_number();
         Self {
             start_vpn,
-            page_nums: end_vpn.0 - start_vpn.0 + 1,
+            page_nums: end_vpn.0 - start_vpn.0,
             map_type,
             data_frames: BTreeMap::new(),
             permission,
@@ -118,8 +118,17 @@ impl<P: PageTable> MemRegion<P> {
     }
 
     #[inline]
+    pub fn start_vpn(&self) -> VirtPageNum {
+        self.start_vpn
+    }
+
+    #[inline]
     pub fn end_vpn(&self) -> VirtPageNum {
-        VirtPageNum(self.start_vpn.0 + self.page_nums + 1)
+        VirtPageNum(self.start_vpn.0 + self.page_nums)
+    }
+
+    pub fn get_size(&self) -> usize {
+        self.page_nums * PAGE_SIZE
     }
 }
 
@@ -133,6 +142,7 @@ extern "C" {
     fn sbss_with_stack();
     fn ebss();
     fn ekernel();
+    fn strampoline();
 }
 
 pub trait AddressSpace<P: PageTable> {
@@ -180,7 +190,7 @@ impl<P: PageTable> HostAddressSpace<P> {
         Self {
             regions: Vec::new(),
             gpm_base: GUEST_START_VA,
-            vcpu_stack_base: GUEST_STACK_BASE,
+            vcpu_stack_base: GUEST_STACK_TOP - GUEST_STACK_SIZE,
             page_table: P::new(),
         }
     }
@@ -225,8 +235,15 @@ impl<P: PageTable> HostAddressSpace<P> {
             (ekernel as usize).into(),
             MEMORY_END - (ekernel as usize),
             MapType::new_linear((ekernel as usize).into()),
-            MapPermission::R | MapPermission::X,
+            MapPermission::R | MapPermission::W,
         ));
+
+        // map trampoline for hypervisor
+        host_vm_space.page_table.map(
+            TRAMPOLINE.into(),
+            (strampoline as usize).into(),
+            PTEFlags::R | PTEFlags::X,
+        );
 
         host_vm_space
     }
@@ -247,9 +264,9 @@ impl<P: PageTable> HostAddressSpace<P> {
         // update gpm start va
         self.gpm_base = PAGE_SIZE + host_map_region.end_vpn().page_base_va().0;
 
-        let host_start_vpn = VirtAddress(self.gpm_base).current_page_number();
+        let host_start_vpn = host_map_region.start_vpn();
         let host_end_vpn = host_map_region.end_vpn();
-        let page_nums = host_end_vpn.0 - host_start_vpn.0;
+        let page_nums = host_map_region.page_nums;
 
         let mut gpm = GuestAddressSpace::<G>::new_bare(guest_id);
         let guest_start_ppn = PhysPageNum::from(PhysAddress(KERNEL_START_PA));
@@ -285,12 +302,13 @@ impl<P: PageTable> HostAddressSpace<P> {
             MapPermission::R | MapPermission::W,
         );
         stack_region.map(&mut self.page_table);
+        self.vcpu_stack_base -= GUEST_STACK_SIZE + PAGE_SIZE;
 
         stack_region
     }
 
     /// active page based virtual address space
-    pub fn active(&self) {
+    pub fn activate(&self) {
         let token = self.page_table.token();
         unsafe {
             active_page_table(token);
