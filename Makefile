@@ -20,9 +20,17 @@ OBJDUMP		:= rust-objdump --arch-name=riscv64
 $(KERNEL_BIN):build
 	$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
+CARGO_OPTS ?= build --release
+
+ifeq ($(MODE),debug)
+CARGO_OPTS = build
+endif
+
+clean:
+	cargo clean
+
 build:
-	cargo build --release
-	#cargo build
+	cargo $(CARGO_OPTS)
 
 run: $(KERNEL_BIN)
 	$(QEMU) $(QEMUOPTS)
