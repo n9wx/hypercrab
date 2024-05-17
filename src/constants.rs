@@ -12,7 +12,7 @@ pub const GUEST_STACK_SIZE: usize = PAGE_SIZE * 16;
 
 pub const GUEST_STACK_TOP: usize = TRAMPOLINE - PAGE_SIZE;
 
-// 2 ^ 24 = 16M
-pub const GUEST_MEM_SIZE: usize = 0x100_0000;
+// 2 ^ 22 = 4M
+pub const GUEST_MEM_SIZE: usize = 0x40_0000;
 
 pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;

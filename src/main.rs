@@ -40,7 +40,6 @@ pub fn hypervisor_entry(hart_id: usize, dtb_paddress: usize) {
     set_hyp_trap_handler();
     println!("[hypervisor]set hyp trap handler");
     unsafe {
-        println!("get guard");
         let guest_id = create_guest(1, GUEST_MEM_SIZE, &GUEST_IMAGE);
         println!("load guest bin!");
         run_guest(guest_id);

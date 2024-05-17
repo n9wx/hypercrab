@@ -167,6 +167,19 @@ impl VirtPageNum {
     }
 }
 
+impl From<VirtPageNum> for VirtAddress {
+    fn from(value: VirtPageNum) -> Self {
+        value.page_base_va()
+    }
+}
+
+impl From<VirtAddress> for VirtPageNum {
+    fn from(value: VirtAddress) -> Self {
+        assert_eq!(value.page_offset(), 0);
+        value.current_page_number()
+    }
+}
+
 impl From<PhysPageNum> for PhysAddress {
     fn from(value: PhysPageNum) -> Self {
         Self(value.0 << PAGE_SIZE_BITS)

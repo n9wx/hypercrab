@@ -9,6 +9,7 @@
     .section .text.trampoline
     .global __vm_exit
     .global __vm_entry
+    .global __traps_in_hyp
 
     .align 2
 __vm_exit:
@@ -29,14 +30,14 @@ __vm_exit:
     csrr t1,sscratch
     sd t1,2*8(sp)
 
-    # now we can use gp freely
+    # now we can use gpr freely
     # store sstatus
     csrr t0,sstatus
     sd t0,32*8(sp)
     # store sepc
     csrr t0,sepc
     sd t0,33*8(sp)
-    csrr t0,hstatus
+    csrr t1,hstatus
     sd t0,34*8(sp)
     csrr t0,hgatp
     sd t0,35*8(sp)
@@ -48,20 +49,23 @@ __vm_exit:
     jr t1
 
 # __vm_entry(*mut TrapContext)
+# not set trap entry
 __vm_entry:
     # first record the ptr of current vcpu context
     csrw sscratch,a0
     # restore hs level csr first
-    ld t0,33*8(sp)
+    ld t0, 32*8(a0)
     csrw sstatus,t0
-    ld t1,35*8(sp)
-    csrw hgatp,t1
-    ld t0,34*8(a0)
-    # load hgatp and flush Gstage pagetable
-    csrw hstatus,t0
-    hfence.gvma
-    ld t1,32*8(a0)
+    ld t1,33*8(a0)
     csrw sepc,t1
+    ld t0, 34*8(a0)
+    csrw hstatus,t0
+    # load hgatp and flush Gstage pagetable
+    ld t1,35*8(a0)
+    csrw hgatp,t1
+    hfence.gvma
+    # restore sp for vcpu
+    sd sp,36*8(a0)
 
     .set n,1
     .rept 9
@@ -77,3 +81,21 @@ __vm_entry:
     # restore a0 here
     ld a0,10*8(a0)
     sret
+
+    .align 2
+__traps_in_hyp:
+    addi sp, sp, -34*8
+    sd x1, 1*8(sp)
+    sd x3, 3*8(sp)
+    .set n, 5
+    .rept 27
+        SAVE_GP %n
+        .set n, n+1
+    .endr
+    csrr t0,sstatus
+    csrr t1,sepc
+    sd t0,32*8(sp)
+    sd t1,33*8(sp)
+    mv a0, sp
+    csrr t2, sscratch
+    jalr t2

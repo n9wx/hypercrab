@@ -7,6 +7,7 @@ use crate::constants::{GUEST_STACK_SIZE, GUEST_STACK_TOP, MEMORY_END, PAGE_SIZE,
 use crate::mm::frame_allocator::FrameTracker;
 use crate::mm::page_table::{fill_guest_page_table, CombinedWalker};
 use crate::mm::{frame_alloc, GStagePageTable, PageTable};
+use crate::GUEST_IMAGE;
 use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -89,8 +90,9 @@ impl<P: PageTable> MemRegion<P> {
             }
             MapType::Framed => {
                 let frame_tracker = frame_alloc().unwrap();
-                self.data_frames.insert(vpn, frame_tracker.clone());
-                frame_tracker.ppn
+                let ppn = frame_tracker.ppn;
+                self.data_frames.insert(vpn, frame_tracker);
+                ppn
             }
         };
         let pte_flags = PTEFlags::from_bits(self.permission.bits).unwrap();
@@ -195,6 +197,18 @@ impl<P: PageTable> HostAddressSpace<P> {
         }
     }
 
+    pub fn map_embedded_guest(&mut self) {
+        let start_address = GUEST_IMAGE.as_ptr() as usize;
+        let mut guest_image_region = MemRegion::<P>::new(
+            start_address.into(),
+            GUEST_IMAGE.len(),
+            MapType::new_linear(start_address.into()),
+            MapPermission::R | MapPermission::W | MapPermission::X,
+        );
+        guest_image_region.map(&mut self.page_table);
+        self.regions.push(guest_image_region);
+    }
+
     pub fn new_host_space() -> Self {
         let mut host_vm_space = Self::new_bare();
 
@@ -240,10 +254,12 @@ impl<P: PageTable> HostAddressSpace<P> {
 
         // map trampoline for hypervisor
         host_vm_space.page_table.map(
-            TRAMPOLINE.into(),
-            (strampoline as usize).into(),
+            VirtAddress(TRAMPOLINE).into(),
+            PhysAddress(strampoline as usize).into(),
             PTEFlags::R | PTEFlags::X,
         );
+
+        host_vm_space.map_embedded_guest();
 
         host_vm_space
     }

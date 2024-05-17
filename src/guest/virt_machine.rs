@@ -4,6 +4,7 @@ use crate::arch::{vm_exit, TrapContext};
 use crate::guest::vcpu::VCpu;
 use crate::guest::GuestResource;
 use crate::mm::{hpm_guard, AddressSpace, GStagePageTable, GuestAddressSpace, PageTable};
+use crate::println;
 use alloc::vec::Vec;
 
 pub struct Guest<P: PageTable, G: GStagePageTable> {
@@ -45,7 +46,7 @@ impl Guest<PageTableAdapter, PageTableAdapter> {
     pub fn load_guest_image(&mut self, guest_data: &[u8]) {
         unsafe {
             let dst = core::slice::from_raw_parts_mut(
-                self.resources.get_start_va(),
+                self.resources.get_start_ptr(),
                 self.resources.get_mem_size(),
             );
 

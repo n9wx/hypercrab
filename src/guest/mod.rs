@@ -31,7 +31,7 @@ impl<P: PageTable> GuestResource<P> {
     }
 
     #[inline(always)]
-    pub fn get_start_va(&mut self) -> *mut u8 {
+    pub fn get_start_ptr(&mut self) -> *mut u8 {
         self.normal_mem.start_vpn.page_base_va().0 as *mut u8
     }
 
