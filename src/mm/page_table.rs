@@ -100,6 +100,9 @@ pub fn fill_guest_page_table<P: PageTable, G: GStagePageTable>(walker: CombinedW
     for (guest_pte, host_pte) in walker {
         let host_ppn = host_pte.ppn();
         // todo 暂时先给整个guest address space rwx权限,应该有方法限制吧
-        *guest_pte = PageTableEntry::new(host_ppn, PTEFlags::R | PTEFlags::W | PTEFlags::X);
+        *guest_pte = PageTableEntry::new(
+            host_ppn,
+            PTEFlags::R | PTEFlags::W | PTEFlags::X | PTEFlags::V | PTEFlags::U,
+        );
     }
 }

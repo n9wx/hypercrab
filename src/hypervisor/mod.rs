@@ -1,6 +1,7 @@
 use crate::arch::page_table::PageTableAdapter;
 use crate::arch::{vm_entry, TrapContext};
 use crate::guest::Guest;
+use crate::mm::{HostAddressSpace, HOST_ADDRESS_SPACE};
 use alloc::collections::LinkedList;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use spin::{Mutex, MutexGuard, Once};
@@ -28,6 +29,13 @@ pub fn create_guest(cpu_nums: usize, mem_size: usize, guest_data: &[u8]) -> usiz
     let guest_id = alloc_guest_id();
     let mut guest = Guest::new(guest_id, cpu_nums, mem_size);
     guest.load_guest_image(guest_data);
+    unsafe {
+        HOST_ADDRESS_SPACE
+            .get()
+            .unwrap()
+            .lock()
+            .unmap_embedded_guest();
+    }
     queue_guard().push_back(guest);
     guest_id
 }

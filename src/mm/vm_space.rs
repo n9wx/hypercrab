@@ -209,6 +209,14 @@ impl<P: PageTable> HostAddressSpace<P> {
         self.regions.push(guest_image_region);
     }
 
+    pub fn unmap_embedded_guest(&mut self) {
+        let start_addr = GUEST_IMAGE.as_ptr() as usize;
+        let guest_image_region = self.regions.last().unwrap();
+        assert_eq!(guest_image_region.start_vpn.page_base_va().0, start_addr);
+        let mut region = self.regions.pop().unwrap();
+        region.unmap(&mut self.page_table);
+    }
+
     pub fn new_host_space() -> Self {
         let mut host_vm_space = Self::new_bare();
 
