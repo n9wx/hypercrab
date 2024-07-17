@@ -23,7 +23,7 @@ endif
 BOOTLOADER	:= bootloader/rustsbi-qemu.bin
 QEMU		:= qemu-system-riscv64
 
-QEMUOPTS	= --machine virt -m 3G -bios $(BOOTLOADER) -nographic
+QEMUOPTS	= --machine virt,aia=none -m 3G -bios $(BOOTLOADER) -nographic -smp 2
 QEMUOPTS	+=-device loader,file=$(TARGET_BIN),addr=$(KERNEL_ENTRY_PA)
 QEMUOPTS	+=-device virtio-keyboard-device
 QEMUOPTS	+=-device virtio-mouse-device

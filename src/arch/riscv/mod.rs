@@ -2,6 +2,7 @@ pub mod context;
 pub mod mm;
 pub mod page_table;
 pub mod vm_exit;
+mod intc;
 
 pub use context::*;
 use core::arch::global_asm;

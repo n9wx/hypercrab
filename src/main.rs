@@ -8,6 +8,7 @@ use crate::constants::GUEST_MEM_SIZE;
 use crate::hypervisor::{create_guest, init_guest_queue, run_guest};
 use crate::mm::{mm_init, HostAddressSpace};
 use core::arch::global_asm;
+use core::ptr::NonNull;
 
 mod arch;
 mod console;
@@ -18,6 +19,7 @@ mod lang_items;
 mod mm;
 mod sbi;
 mod schedule;
+mod iommu;
 
 extern crate alloc;
 
@@ -33,7 +35,7 @@ pub fn hypervisor_entry(hart_id: usize, dtb_paddress: usize) {
         println!("current cpu support hardware virtualization!");
         // before_start_check();
     }
-    // walk_fdt(dtb_paddress);
+    walk_fdt(dtb_paddress);
     mm_init();
     init_guest_queue();
     println!("[hypervisor] init host address space success!");
